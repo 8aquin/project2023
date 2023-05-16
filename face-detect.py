@@ -8,6 +8,7 @@ from PIL import Image,ImageTk
 import pandas as pd
 import datetime
 import time
+import re
 
 #Mainframe
 
@@ -17,9 +18,6 @@ window.configure(background='#D3D3D3')
 window.title('Main-proj-2023')
 
 import mysql.connector
-import csv
-import tkinter as tk
-
 def create_database():
     # Connect to the XAMPP MySQL database
     conn = mysql.connector.connect(user='root', password='', host='localhost', database='student')
@@ -69,7 +67,7 @@ def admin_panel():
                 root.title("Student Details")
                 root.configure(background='#D3D3D3')
 
-                cs = 'E:/projs/face-detect/StudentDetails/StudentDetails.csv'
+                cs = 'E:/projs/face-detect/project2023/StudentDetails/StudentDetails.csv'
                 with open(cs, newline="") as file:
                     reader = csv.reader(file)
                     r = 0
@@ -156,79 +154,83 @@ def err_screen():
     sc.configure(background='#D3D3D3')
     tk.Label(sc,text='Enrollment & Name required!!!',fg='#fb6944',bg='white',font=('times', 14, ' bold ')).pack()
     tk.Button(sc,text='OK',command=del_sc,fg="black",bg="#76c2b5",width=9,height=1, activebackground="#b2e8e2",font=('times', 15, ' bold ')).place(x=90,y=50)
+import os
+import csv
+import time
+import datetime
+import cv2
 
 #taking images for dataset
 def take_img():
+    def display_notification(msg, bg_color="#4fa234", width=50, font=('times', 18, 'bold')):
+        Notification.configure(text=msg, bg=bg_color, width=width, font=font)
+        Notification.place(x=250, y=400)
+
+    def err_screen():
+        display_notification("Please fill both the details.", bg_color="#fb6944", width=30)
+
+    def save_student_details(enrollment, name):
+        ts = time.time()
+        date = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d')
+        time_ = datetime.datetime.fromtimestamp(ts).strftime('%H:%M:%S')
+        row = [enrollment, name, date, time_]
+        file_path = 'StudentDetails/StudentDetails.csv'
+        file_exists = os.path.isfile(file_path)
+        with open(file_path, 'a', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            if not file_exists:
+                writer.writerow(['Enrollment', 'Name', 'Date', 'Time'])
+            writer.writerow(row)
+
+
+    def save_image(enrollment, name, img, sample_num):
+        if not os.path.exists("TrainingImage"):
+            os.mkdir("TrainingImage")
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        faces = detector.detectMultiScale(gray, 1.3, 5)
+        for (x, y, w, h) in faces:
+            cv2.rectangle(img, (x, y), (x + w, y + h), (255, 0, 0), 2)
+            sample_num += 1
+            file_path = f"TrainingImage/{name}.{enrollment}.{sample_num}.jpg"
+            cv2.imwrite(file_path, gray[y:y + h, x:x + w])
+        return sample_num
+
     l1 = txt.get()
     l2 = txt2.get()
-    if l1 == '':
-        err_screen()
-    elif l2 == '':
+    if l1 == '' or l2 == '':
         err_screen()
     else:
         try:
             cam = cv2.VideoCapture(0)
+            if not cam.isOpened():
+                display_notification("Camera not available. Please check if it's connected.")
+                return
             detector = cv2.CascadeClassifier('haarcascade_frontalface_default.xml')
-            Enrollment = txt.get()
-            Name = txt2.get()
-            sampleNum = 0
-            while (True):
+            enrollment = txt.get()
+            name = txt2.get()
+            sample_num = 0
+            while True:
                 ret, img = cam.read()
-                gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-                faces = detector.detectMultiScale(gray, 1.3, 5)
-                for (x, y, w, h) in faces:
-                    cv2.rectangle(img, (x, y), (x + w, y + h), (255, 0, 0), 2)
-                    # incrementing sample number
-                    sampleNum = sampleNum + 1
-                    # saving the captu#fb6944 face in the dataset folder
-                    cv2.imwrite("TrainingImage/ " + Name + "." + Enrollment + '.' + str(sampleNum) + ".jpg",
-                                gray[y:y + h, x:x + w])
-                    cv2.imshow('Frame', img)
-                # wait for 100 miliseconds
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    break
-                # break if the sample number is morethan 100
-                elif sampleNum > 70:
+                if not ret:
+                    continue
+                sample_num = save_image(enrollment, name, img, sample_num)
+                cv2.imshow('Frame', img)
+                if cv2.waitKey(1) & 0xFF == ord('q') or sample_num > 250:
                     break
             cam.release()
             cv2.destroyAllWindows()
-            ts = time.time()
-            Date = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d')
-            Time = datetime.datetime.fromtimestamp(ts).strftime('%H:%M:%S')
-            row = [Enrollment, Name, Date, Time]
-            with open('StudentDetails\StudentDetails.csv', 'a+') as csvFile:
-                writer = csv.writer(csvFile, delimiter=',')
-                writer.writerow(row)
-                csvFile.close()
-            res = "Images Saved for Enrollment : " + Enrollment + " Name : " + Name
-            Notification.configure(text=res, bg="#4fa234", width=50, font=('times', 18, 'bold'))
-            Notification.place(x=250, y=400)
+            save_student_details(enrollment, name)
+            display_notification(f"Images Saved for Enrollment: {enrollment} Name: {name}")
         except FileExistsError as F:
-            f = 'Student Data already exists'
-            Notification.configure(text=f, bg="#fb6944", width=21)
-            Notification.place(x=450, y=400)
-
+            display_notification("Student Data already exists", bg_color="#fb6944", width=21)
 
 #Training model
 def trainimg():
     recognizer = cv2.face.LBPHFaceRecognizer_create()
     global detector
     detector = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
-    try:
-        global faces,Id
-        faces, Id = getImagesAndLabels("TrainingImage")
-    except Exception as e:
-        l='Please create a "TrainingImage" folder & add images'
-        Notification.configure(text=l, bg="#4fa234", width=50, font=('times', 18, 'bold'))
-        Notification.place(x=350, y=400)
-
-    recognizer.train(faces, np.array(Id))
-    try:
-        recognizer.save("TrainingImageLabel\Trainner.yml")
-    except Exception as e:
-        q='Please create a "TrainingImageLabel" folder'
-        Notification.configure(text=q, bg="#4fa234", width=50, font=('times', 18, 'bold'))
-        Notification.place(x=350, y=400)
+    global faces,Id
+    faces, Id = getImagesAndLabels("TrainingImage")
 
     res = "Model Trained"  
     Notification.configure(text=res, bg="#4fa234", width=50, font=('times', 18, 'bold'))
@@ -245,7 +247,7 @@ def getImagesAndLabels(path):
         # Convert the PIL image into a numpy array
         imageNp = np.array(pilImage, dtype=np.uint8)
         # Get the Id from the image filename
-        Id = int(os.path.split(imagePath)[-1].split(".")[1])
+        Id = os.path.split(imagePath)[-1].split(".")[1]
         # Extract the face from the training image sample
         faces = detector.detectMultiScale(imageNp)
         # If a face is detected, append it to the list of face samples along with its Id
@@ -265,7 +267,7 @@ def on_closing():
         window.destroy()
 window.protocol("WM_DELETE_WINDOW", on_closing)
 
-message = tk.Label(window, text="Facial Detection Attendance System", bg="#D3D3D3",fg="black", width=50,
+message = tk.Label(window, text="Student Enrollment", bg="#D3D3D3",fg="black", width=50,
                    height=3, font=('times', 30, 'italic bold '))
 
 message.place(x=80, y=20)
@@ -277,9 +279,8 @@ lbl = tk.Label(window, text="Enter Enrollment", width=20, height=2, fg="white", 
 lbl.place(x=200, y=200)
 
 def testVal(inStr,acttyp):
-    if acttyp == '1': 
-        #insert
-        if not inStr.isdigit():
+    if acttyp == '1': #insert
+        if not inStr.isalnum() and '-' not in inStr:
             return False
     return True
 

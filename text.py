@@ -11,7 +11,7 @@ recognizer = cv2.face.LBPHFaceRecognizer_create()
 recognizer.read('TrainingImageLabel/Trainner.yml')
 
 # Dictionary to map label numbers to student names
-labels_dict = {0: "John", 1: "Alice", 2: "Bob"}  # Update with your labels and names
+labels_dict = {0: "Aquin", 1: "Quin", 2: "Manup"}  # Update with your labels and names
 
 while True:
     # Read the frame from the video capture

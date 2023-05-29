@@ -1,9 +1,156 @@
 import tkinter as tk
 import mysql.connector
-import attendance
 import getcsv
-
+import time
 teacher_win = None
+import pandas as pd
+import datetime
+import os
+import cv2
+
+
+def FillAttendances():
+    global Subject
+    global aa
+
+    aa = ''
+
+    Subject = tx.get()
+
+    sub = tx.get()
+    now = time.time()  ###For calculate seconds of video
+    future = now + 20
+    if time.time() < future:
+        if sub != '':
+            recognizer = cv2.face.LBPHFaceRecognizer_create()  # cv2.createLBPHFaceRecognizer()
+            try:
+                recognizer.read("TrainingImageLabel\Trainner.yml")
+            except:
+                e = 'Model not found,Please train model'
+                Notifica = tk.Label(text=e, bg="red",fg="black", width=33, font=('times', 15, 'bold'))
+                Notifica.place(x=20, y=250)
+
+            harcascadePath = "haarcascade_frontalface_default.xml"
+            faceCascade = cv2.CascadeClassifier(harcascadePath)
+            df = pd.read_csv("StudentDetails\StudentDetails.csv")
+            cam = cv2.VideoCapture(0)
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            col_names = ['Enrollment', 'Name', 'Date', 'Time']
+            attendance = pd.DataFrame(columns=col_names)
+            while True:
+                ret, im = cam.read()
+                gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+                faces = faceCascade.detectMultiScale(gray, 1.2, 5)
+
+                for (x, y, w, h) in faces:
+                    global Id
+
+                    Id, conf = recognizer.predict(gray[y:y + h, x:x + w])
+                    if (conf < 70):
+                        print(conf)
+                        global date
+                        global timeStamp
+                        Subject = tx.get()
+                        ts = time.time()
+                        date = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d')
+                        timeStamp = datetime.datetime.fromtimestamp(ts).strftime('%H:%M:%S')
+                        aa = df.loc[df['Enrollment'] == Id]['Name'].values
+                        global tt
+                        tt = str(Id) + "-" + aa
+                        En = '15624031' + str(Id)
+                        attendance.loc[len(attendance)] = [Id, aa, date, timeStamp]
+                        cv2.rectangle(im, (x, y), (x + w, y + h), (0, 260, 0), 7)
+                        cv2.putText(im, str(tt), (x + h, y), font, 1, (255, 255, 0,), 4)
+
+                    else:
+                        Id = 'Unknown'
+                        Id = 'Unknown'
+                        tt = str(Id)
+                        cv2.rectangle(im, (x, y), (x + w, y + h), (0, 25, 255), 7)
+                        cv2.putText(im, str(tt), (x + h, y), font, 1, (0, 25, 255), 4)
+                if time.time() > future:
+                    break
+
+                attendance = attendance.drop_duplicates(['Enrollment'], keep='first')
+                cv2.imshow('Filling attedance..', im)
+                key = cv2.waitKey(30) & 0xff
+                if key == 27:
+                    break
+
+            ts = time.time()
+            date = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d')
+            timeStamp = datetime.datetime.fromtimestamp(ts).strftime('%H:%M:%S')
+            Hour, Minute, Second = timeStamp.split(":")
+            fileName = "Attendance/" + Subject + '_' + date + ".csv"
+            # fileName = "Attendance/attendance.csv"
+            if os.path.isfile(fileName):
+                existing_data = pd.read_csv(fileName)
+                attendance = pd.concat([existing_data, attendance], ignore_index=True)
+            else:
+                attendance = attendance.drop_duplicates(['Enrollment'], keep='first')
+            attendance.to_csv(fileName, index=False)
+
+            ##Create table for Attendance
+            date_for_DB = datetime.datetime.fromtimestamp(ts).strftime('%Y_%m_%d')
+            attendance = str(Subject + "_" + date_for_DB + "_Time_" + Hour + "_" + Minute + "_" + Second)
+
+            import mysql.connector
+
+            # Connect to the database
+            conn = mysql.connector.connect(
+                host='localhost',
+                user='root',
+                password='',
+                database='frams'
+            )
+            cursor = conn.cursor()
+
+            # Define the table name
+            attendance = 'attendance'
+
+            # Now enter attendance in the database
+            insert_data_query = "INSERT INTO {} (ENROLLMENT,NAME , DATE, TIME) VALUES (%s, %s, %s, %s)".format(
+                attendance)
+            values = (str(aa), str(), str(date), str(timeStamp))
+
+            try:
+                cursor.execute(insert_data_query, values)  # Insert the attendance data into the table
+                conn.commit()  # Commit the changes to the database
+            except mysql.connector.Error as e:
+                conn.rollback()  # Rollback the transaction in case of error
+                print("Error inserting data into MySQL database:", e)
+
+            # Close the database connection
+            cursor.close()
+            conn.close()
+
+            # M = 'Attendance filled Successfully'
+            # Notifica = tk.Label(teacher_window, text="Attendence filled Succesfully", bg="Green", fg="white", width=33,
+            #                     height=2, font=('times', 15, 'bold'))
+            # Notifica.place(x=175, y=400)
+
+            cam.release()
+            cv2.destroyAllWindows()
+
+            import csv
+            root = tk.Tk()
+            root.title("Attendance of " + Subject)
+            root.configure(background='snow')
+            cs = fileName
+            with open(cs, newline="") as file:
+                reader = csv.reader(file)
+                r = 0
+                for col in reader:
+                    c = 0
+                    for row in col:
+                        # I've added some styling
+                        label = tk.Label(root, width=20, height=2, fg="black", font=('times', 15, 'bold'),
+                                         bg="#76c2b5", text=row, relief=tk.RIDGE)
+                        label.grid(row=r, column=c)
+                        c += 1
+                    r += 1
+            root.mainloop()
+
 
 def teacher_window():
     global teacher_win
@@ -13,7 +160,7 @@ def teacher_window():
         teacher_win.title("Teacher Registration Page and Login")
         teacher_win.configure(background='#1c6e8c')
         teacher_win.protocol("WM_DELETE_WINDOW", on_teacher_window_close)
-        
+
         # Registration GUI elements
         reg_frame = tk.Frame(teacher_win, bg='#1c6e8c')
         reg_frame.pack(pady=20)
@@ -70,6 +217,7 @@ def teacher_window():
             password='',
             database='frams'
             )
+
             cursor = conn.cursor()
 
             # Insert new teacher into database
@@ -151,17 +299,24 @@ def teacher_window():
                 teacher_window.configure(background='#1c6e8c')
                 # Add widgets and functionality to the new window
 
-                message = tk.Label(teacher_window, text="Welcome", fg="black",bg = "#1c6e8c", width=40,
+                message = tk.Label(teacher_window, text="Attendance", fg="black",bg = "#1c6e8c", width=40,
                    height=3, font=('times', 30, 'italic bold '))
                 message.place(x=40,y=20)
 
+                global tx
+                tx = tk.Entry(teacher_window, width=20, bg="snow", fg="black", font=('times', 23, ' bold '))
+                tx.place(x=300, y=205)
+
+                sub = tk.Label(teacher_window, text="Enter Subject", width=15, height=2, fg="black", bg="sky blue", font=('times', 15, ' bold '))
+                sub.place(x=70, y=200)
+
                 # Add Attendance Button
-                attendance_button = tk.Button(teacher_window, text="Attendance", command=attendance.FillAttendances, fg="black", bg="#76c2b5", width=10, height=1,
+                attendance_button = tk.Button(teacher_window, text="Attendance", command=FillAttendances, fg="black", bg="#76c2b5", width=10, height=1,
                                         activebackground="#b2e8e2", font=('times', 15, ' bold '))
-                attendance_button.place(x=300, y=350)
+                attendance_button.place(x=250, y=350)
 
                 # Add Student File Button
-                student_file_button = tk.Button(teacher_window, text="Student File", command=getcsv.view_attendance_csv, fg="black", bg="#76c2b5", width=10, height=1,
+                student_file_button = tk.Button(teacher_window, text="Student File", command=getcsv.display_student_details, fg="black", bg="#76c2b5", width=10, height=1,
                                         activebackground="#b2e8e2", font=('times', 15, ' bold '))
                 student_file_button.place(x=600, y=350)
 
@@ -172,7 +327,7 @@ def teacher_window():
 
                 # Start the GUI event loop
                 teacher_window.mainloop()
-    
+
             else:
                 # Show error message and close database connection
                 success_label_log.config(text="Incorrect email or password.", fg="red")
@@ -183,7 +338,7 @@ def teacher_window():
 
         login_button = tk.Button(log_frame, text="Login", fg="black", bg="#76c2b5", width=20,
                              height=2,activebackground="#b2e8e2", command=login_teacher, font=('times', 15, ' bold '))
-        login_button.grid(row=3, column=1,padx=5, pady=5)
+        login_button.grid(row=3, column=0, columnspan=2)
 
 def on_teacher_window_close():
     global teacher_win

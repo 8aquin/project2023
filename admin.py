@@ -10,6 +10,8 @@ import datetime
 import time
 import teacher
 import mysql.connector
+import pandas as pd
+# import pymysql.connections
 
 # create main window
 win = tk.Tk()
@@ -18,6 +20,18 @@ win.title("Admin Login")
 win.geometry('860x430')
 win.configure(background='#D3D3D3')
 
+def del_sc():
+    sc.destroy()
+def err_screen():
+    global sc
+    sc = tk.Tk()
+    sc.geometry('300x100')
+    sc.iconbitmap('fd.ico')
+    sc.title('Warning!!')
+    sc.configure(background='#D3D3D3')
+    tk.Label(sc,text='Enrollment & Name required!!!',fg='#fb6944', bg="#76c2b5",font=('times', 14, ' bold ')).pack()
+    tk.Button(sc,text='OK',command=del_sc,fg="black", bg="#76c2b5", activebackground="#b2e8e2",width=9,height=1, font=('times', 15, ' bold ')).place(x=90,y=50)
+
 
 def homepage():
     global txt, txt2
@@ -25,7 +39,7 @@ def homepage():
     window.geometry('1280x720')
     window.configure(background='#1c6e8c')
     window.title('Main-proj-2023')
-    
+
     window.grid_rowconfigure(0, weight=1)
     window.grid_columnconfigure(0, weight=1)
     window.iconbitmap('fd.ico')
@@ -93,11 +107,26 @@ def homepage():
                 mycursor.execute(sql, val)
                 mydb.commit()
 
-                row = [Enrollment, Name, Date, Time]
-                with open('StudentDetails\StudentDetails.csv', 'a+') as csvFile:
-                    writer = csv.writer(csvFile, delimiter=',')
-                    writer.writerow(row)
-                    csvFile.close()
+                # Get the ID of the newly inserted row
+                inserted_id = mycursor.lastrowid
+                row = [inserted_id,Enrollment, Name, Date, Time]
+
+                df = pd.read_csv('StudentDetails\StudentDetails.csv')
+                columns = df.columns
+
+                newdf = pd.DataFrame([row], columns = columns)
+
+                df = pd.concat([df, newdf])
+
+                df.to_csv('StudentDetails\StudentDetails.csv',  index = False)
+
+                Notification = tk.Label(window, text="", bg="#4fa234", width=50, font=('times', 18, 'bold'))
+                Notification.place(x=290, y=400)
+
+                # with open('StudentDetails\StudentDetails.csv', 'a+') as csvFile:
+                #     writer = csv.writer(csvFile, delimiter=',')
+                #     writer.writerow(row)
+                #     csvFile.close()
                 res = "Images Saved for Enrollment : " + Enrollment + " Name : " + Name
                 Notification.configure(text=res, bg="#4fa234", width=50, font=('times', 18, 'bold'))
                 Notification.place(x=250, y=400)
@@ -105,25 +134,11 @@ def homepage():
                 f = 'Student Data already exists'
                 Notification.configure(text=f, bg="#fb6944", width=21)
                 Notification.place(x=450, y=400)
-        Notification = tk.Label(window, text="", bg="#ffffff", fg="#000000", width=40, height=2, font=('times', 14, 'bold'))
-        Notification.place(x=250, y=400)
+
+
 
 
     #Training model
-    def trainimg():
-        recognizer = cv2.face.LBPHFaceRecognizer_create()
-        global detector
-        detector = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
-        global faces,Id
-        faces, Id = getImagesAndLabels("TrainingImage")
-
-        Notification = tk.Label(window, text="", bg="#4fa234", width=50, font=('times', 18, 'bold'))
-        Notification.place(x=290, y=400)
-
-        res = "Model Trained"  
-        Notification.configure(text=res, bg="#4fa234", width=50, font=('times', 18, 'bold'))
-
-        
     def getImagesAndLabels(path):
         imagePaths = [os.path.join(path, f) for f in os.listdir(path)]
         faceSamples = []
@@ -143,6 +158,25 @@ def homepage():
                 faceSamples.append(imageNp[y:y + h, x:x + w])
                 Ids.append(Id)
         return faceSamples, Ids
+
+    def trainimg():
+        recognizer = cv2.face.LBPHFaceRecognizer_create()
+        global detector
+        detector = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
+        global faces,Id
+
+
+
+        faces, Id = getImagesAndLabels("TrainingImage")
+        Id = np.array(Id, dtype=np.int32)
+        recognizer.train(faces, Id)
+        recognizer.save('TrainingImageLabel/trainner.yml')
+        Notification = tk.Label(window, text="", bg="#4fa234", width=50, font=('times', 18, 'bold'))
+        Notification.place(x=290, y=400)
+
+        res = "Model Trained"  
+        Notification.configure(text=res, bg="#4fa234", width=50, font=('times', 18, 'bold'))
+
     def clear():
         txt.delete(first=0, last=22)
 
@@ -183,7 +217,7 @@ def homepage():
     logoutButton = tk.Button(window, text="Logout", command=window.destroy, fg="black", bg="#E1455F", width=10, height=1,
                              activebackground="#fb6944", font=('times', 15, ' bold '))
     logoutButton.place(x=950, y=20)
-    
+
 
 def show_homepage():
     username = un_entr.get()
@@ -247,14 +281,4 @@ teacher_button.place(x=550, y=250)
 
 win.mainloop()
 
-def del_sc():
-    sc.destroy()
-def err_screen():
-    global sc
-    sc = tk.Tk()
-    sc.geometry('300x100')
-    sc.iconbitmap('fd.ico')
-    sc.title('Warning!!')
-    sc.configure(background='#D3D3D3')
-    tk.Label(sc,text='Enrollment & Name required!!!',fg='#fb6944', bg="#76c2b5",font=('times', 14, ' bold ')).pack()
-    tk.Button(sc,text='OK',command=del_sc,fg="black", bg="#76c2b5", activebackground="#b2e8e2",width=9,height=1, font=('times', 15, ' bold ')).place(x=90,y=50)
+
